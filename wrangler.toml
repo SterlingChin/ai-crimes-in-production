@@ -22,9 +22,9 @@ preview_id = "0e250cc8d0cb49d69bbdf0f1a4174b0d"
 
 # Public vars (safe to commit). Secrets go via `wrangler secret put`.
 [vars]
-# Turnstile TEST site key — always passes in dev. Swap for the real site key
-# from https://dash.cloudflare.com/?to=/:account/turnstile before deploy.
-TURNSTILE_SITE_KEY = "1x00000000000000000000AA"
+# Real Turnstile site key for ai-crimes-in-production.com.
+# Secret key is set via: pnpm secrets:turnstile
+TURNSTILE_SITE_KEY = "0x4AAAAAAC-qKbhZdZQIAQtA"
 
 # Enable request logs in the CF dashboard.
 [observability]
