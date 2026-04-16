@@ -1,0 +1,29 @@
+name = "ai-crimes-in-production"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# KV namespace for storing confessions and rate limit keys.
+# For local dev (`wrangler dev`): Miniflare creates a local SQLite-backed KV,
+# the id/preview_id below don't need to be real. Wrangler still requires them
+# to be non-empty for the config to parse.
+# For production (`wrangler deploy`): run `pnpm kv:create` and replace the id.
+[[kv_namespaces]]
+binding = "CONFESSIONS"
+id = "0000000000000000000000000000000a"
+preview_id = "0000000000000000000000000000000b"
+
+# Public vars (safe to commit). Secrets go via `wrangler secret put`.
+[vars]
+# Turnstile TEST site key — always passes in dev. Swap for the real site key
+# from https://dash.cloudflare.com/?to=/:account/turnstile before deploy.
+TURNSTILE_SITE_KEY = "1x00000000000000000000AA"
+
+# Enable request logs in the CF dashboard.
+[observability]
+enabled = true
+
+# Custom domain is wired up via the Cloudflare dashboard after deploy:
+#   Dashboard -> Workers & Pages -> ai-crimes-in-production -> Settings -> Domains & Routes
+#   Add custom domain: ai-crimes-in-production.com
+# DNS is automatic since the zone is already on Cloudflare.

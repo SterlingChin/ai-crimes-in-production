@@ -1,0 +1,23 @@
+{
+  "name": "ai-crimes-in-production",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Anonymous confessional for AI crimes in production. Send us your sins.",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "kv:create": "wrangler kv namespace create CONFESSIONS",
+    "kv:create-preview": "wrangler kv namespace create CONFESSIONS --preview",
+    "secrets:admin": "wrangler secret put ADMIN_PASSWORD",
+    "secrets:turnstile": "wrangler secret put TURNSTILE_SECRET_KEY",
+    "types": "wrangler types"
+  },
+  "dependencies": {
+    "hono": "^4.6.14"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250109.0",
+    "typescript": "^5.7.2",
+    "wrangler": "^3.99.0"
+  }
+}
