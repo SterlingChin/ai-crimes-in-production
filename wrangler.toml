@@ -2,6 +2,13 @@ name = "ai-crimes-in-production"
 main = "src/index.ts"
 compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
+workers_dev = false
+
+# Custom domain. Zone must already be on Cloudflare (it is — Sterling bought
+# the domain via CF). Wrangler wires DNS automatically on first deploy.
+[[routes]]
+pattern = "ai-crimes-in-production.com"
+custom_domain = true
 
 # KV namespace for storing confessions and rate limit keys.
 # For local dev (`wrangler dev`): Miniflare creates a local SQLite-backed KV,
@@ -10,8 +17,8 @@ compatibility_flags = ["nodejs_compat"]
 # For production (`wrangler deploy`): run `pnpm kv:create` and replace the id.
 [[kv_namespaces]]
 binding = "CONFESSIONS"
-id = "0000000000000000000000000000000a"
-preview_id = "0000000000000000000000000000000b"
+id = "9b71290cd04b4069b603a797e620faa6"
+preview_id = "0e250cc8d0cb49d69bbdf0f1a4174b0d"
 
 # Public vars (safe to commit). Secrets go via `wrangler secret put`.
 [vars]
