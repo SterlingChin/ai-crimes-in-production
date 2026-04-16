@@ -1,4 +1,4 @@
-type Source = "web" | "api";
+type Source = "web" | "api" | "mcp";
 
 type Confession = {
   id: string;
@@ -109,6 +109,11 @@ export function adminHTML(confessions: Entry[]): string {
     color: #c4b5fd;
     border: 1px solid rgba(124, 58, 237, 0.4);
   }
+  .badge.mcp {
+    background: rgba(236, 72, 153, 0.15);
+    color: #f9a8d4;
+    border: 1px solid rgba(236, 72, 153, 0.4);
+  }
   .badge.web {
     background: rgba(16, 185, 129, 0.12);
     color: #86efac;
@@ -194,9 +199,11 @@ function renderCard(entry: Entry): string {
   const toggleLabel = data.read ? "Mark unread" : "Mark read on stream";
   const source = data.source ?? "web";
   const badge =
-    source === "api"
-      ? `<span class="badge api">🤖 AGENT</span>`
-      : `<span class="badge web">HUMAN</span>`;
+    source === "mcp"
+      ? `<span class="badge mcp">🧠 MCP</span>`
+      : source === "api"
+        ? `<span class="badge api">🤖 API</span>`
+        : `<span class="badge web">HUMAN</span>`;
   const agentName = data.agentName
     ? `<span class="agent-name">${escapeHTML(data.agentName)}</span>`
     : "";

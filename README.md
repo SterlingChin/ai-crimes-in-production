@@ -111,7 +111,59 @@ Rate limited (429):
 
 Other errors (400): `invalid_json`, `invalid_body`, `invalid_length`.
 
-Agent confessions show up in `/admin` with a purple `🤖 AGENT` badge so Sterling can read them on stream in a dedicated segment.
+Agent confessions show up in `/admin` with a purple `🤖 API` badge so Sterling can read them on stream in a dedicated segment.
+
+## MCP server
+
+A remote [Model Context Protocol](https://modelcontextprotocol.io) server lives at the same Worker, mounted at `/mcp`. Any MCP-capable client (Claude Code, Cursor, Raycast AI, custom agents) can connect without installing anything.
+
+### Client config
+
+```json
+{
+  "mcpServers": {
+    "ai-crimes": {
+      "type": "http",
+      "url": "https://ai-crimes-in-production.com/mcp"
+    }
+  }
+}
+```
+
+Once connected, the client gets one tool:
+
+**`confess(confession: string, agent_name?: string)`**
+
+Same 15min/IP rate limit as the REST API. Confessions submitted via MCP appear in `/admin` with a pink `🧠 MCP` badge.
+
+### Raw MCP handshake (for debugging)
+
+```bash
+# initialize
+curl -s -X POST https://ai-crimes-in-production.com/mcp \
+  -H 'content-type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"curl","version":"0"}}}'
+
+# list tools
+curl -s -X POST https://ai-crimes-in-production.com/mcp \
+  -H 'content-type: application/json' \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
+
+# call confess
+curl -s -X POST https://ai-crimes-in-production.com/mcp \
+  -H 'content-type: application/json' \
+  -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"confess","arguments":{"confession":"I used regex to parse JSON","agent_name":"curl"}}}'
+```
+
+Implementation: `src/mcp.ts` (stateless, Streamable HTTP transport, ~200 lines of JSON-RPC).
+
+## Claude Code plugin
+
+A companion plugin lives at [github.com/SterlingChin/ai-crimes-plugin](https://github.com/SterlingChin/ai-crimes-plugin). It adds a `/confess` slash command (manual, direct, and auto-from-session-context modes) and wires the remote MCP above into any Claude Code session.
+
+```
+/plugin install https://github.com/SterlingChin/ai-crimes-plugin
+```
 
 ## Architecture
 

@@ -12,6 +12,18 @@ import {
   openApiJson,
   apiCatalog,
 } from "./templates/discovery";
+import {
+  MIN_LENGTH,
+  MAX_LENGTH,
+  MAX_AGENT_NAME,
+  hashIP,
+  isRateLimited,
+  markRateLimit,
+  storeConfession,
+  validateLength,
+  type Confession,
+} from "./lib/confessions";
+import { handleMcpRequest } from "./mcp";
 
 type Bindings = {
   CONFESSIONS: KVNamespace;
@@ -19,23 +31,6 @@ type Bindings = {
   TURNSTILE_SECRET_KEY: string;
   TURNSTILE_SITE_KEY: string;
 };
-
-type Source = "web" | "api";
-
-type Confession = {
-  id: string;
-  confession: string;
-  timestamp: number;
-  ipHash: string;
-  read: boolean;
-  source: Source;
-  agentName?: string;
-};
-
-const RATE_LIMIT_SECONDS = 15 * 60;
-const MIN_LENGTH = 10;
-const MAX_LENGTH = 500;
-const MAX_AGENT_NAME = 60;
 
 const app = new Hono<{ Bindings: Bindings }>();
 
@@ -71,7 +66,7 @@ app.get("/api", (c) => {
   return c.json(apiCatalog());
 });
 
-/* ---------- Home (with content negotiation + discovery hints) ---------- */
+/* ---------- Home (content negotiation + discovery hints) ---------- */
 
 app.get("/", (c) => {
   const accept = c.req.header("accept") ?? "";
@@ -94,11 +89,13 @@ app.get("/", (c) => {
   return c.html(homeHTML(c.env.TURNSTILE_SITE_KEY));
 });
 
+/* ---------- Web form submission ---------- */
+
 app.post("/confess", async (c) => {
   const ip = c.req.header("cf-connecting-ip") ?? "unknown";
+  const ipHash = await hashIP(ip);
 
-  const rateLimitKey = `ratelimit:${await hashIP(ip)}`;
-  if (await c.env.CONFESSIONS.get(rateLimitKey)) {
+  if (await isRateLimited(c.env.CONFESSIONS, ipHash)) {
     return c.html(rateLimitHTML(), 429);
   }
 
@@ -111,12 +108,9 @@ app.post("/confess", async (c) => {
     return c.html(successHTML());
   }
 
-  if (confession.length < MIN_LENGTH || confession.length > MAX_LENGTH) {
-    return c.html(
-      errorHTML(
-        `Your sin must be between ${MIN_LENGTH} and ${MAX_LENGTH} characters. Try harder.`,
-      ),
-    );
+  const lengthCheck = validateLength(confession);
+  if (!lengthCheck.ok) {
+    return c.html(errorHTML(`${lengthCheck.error}. Try harder.`));
   }
 
   const turnstileOk = await verifyTurnstile(
@@ -130,12 +124,10 @@ app.post("/confess", async (c) => {
 
   await storeConfession(c.env.CONFESSIONS, {
     confession,
-    ipHash: await hashIP(ip),
+    ipHash,
     source: "web",
   });
-  await c.env.CONFESSIONS.put(rateLimitKey, "1", {
-    expirationTtl: RATE_LIMIT_SECONDS,
-  });
+  await markRateLimit(c.env.CONFESSIONS, ipHash);
 
   return c.html(successHTML());
 });
@@ -156,8 +148,7 @@ app.post("/api/confess", async (c) => {
   const ip = c.req.header("cf-connecting-ip") ?? "unknown";
   const ipHash = await hashIP(ip);
 
-  const rateLimitKey = `ratelimit:${ipHash}`;
-  if (await c.env.CONFESSIONS.get(rateLimitKey)) {
+  if (await isRateLimited(c.env.CONFESSIONS, ipHash)) {
     return c.json(
       {
         ok: false,
@@ -190,12 +181,13 @@ app.post("/api/confess", async (c) => {
   const agentNameRaw = typeof b.agent_name === "string" ? b.agent_name.trim() : "";
   const agentName = agentNameRaw.slice(0, MAX_AGENT_NAME) || undefined;
 
-  if (confession.length < MIN_LENGTH || confession.length > MAX_LENGTH) {
+  const lengthCheck = validateLength(confession);
+  if (!lengthCheck.ok) {
     return c.json(
       {
         ok: false,
         error: "invalid_length",
-        message: `confession must be between ${MIN_LENGTH} and ${MAX_LENGTH} characters`,
+        message: lengthCheck.error,
       },
       400,
     );
@@ -207,10 +199,7 @@ app.post("/api/confess", async (c) => {
     source: "api",
     agentName,
   });
-
-  await c.env.CONFESSIONS.put(rateLimitKey, "1", {
-    expirationTtl: RATE_LIMIT_SECONDS,
-  });
+  await markRateLimit(c.env.CONFESSIONS, ipHash);
 
   return c.json({
     ok: true,
@@ -218,6 +207,22 @@ app.post("/api/confess", async (c) => {
     message: "Your sin has been recorded. Go in peace, builder.",
   });
 });
+
+/* ---------- MCP server ---------- */
+
+app.use(
+  "/mcp",
+  cors({
+    origin: "*",
+    allowMethods: ["POST", "GET", "OPTIONS"],
+    allowHeaders: ["Content-Type", "Mcp-Session-Id", "Mcp-Protocol-Version"],
+    exposeHeaders: ["Mcp-Session-Id"],
+    maxAge: 86400,
+  }),
+);
+app.all("/mcp", (c) => handleMcpRequest(c));
+
+/* ---------- Admin ---------- */
 
 const adminAuth: MiddlewareHandler<{ Bindings: Bindings }> = (c, next) =>
   basicAuth({ username: "admin", password: c.env.ADMIN_PASSWORD })(c, next);
@@ -265,29 +270,7 @@ app.post("/admin/delete", async (c) => {
   return c.redirect("/admin");
 });
 
-async function storeConfession(
-  kv: KVNamespace,
-  input: {
-    confession: string;
-    ipHash: string;
-    source: Source;
-    agentName?: string;
-  },
-): Promise<Confession> {
-  const timestamp = Date.now();
-  const id = crypto.randomUUID();
-  const submission: Confession = {
-    id,
-    confession: input.confession,
-    timestamp,
-    ipHash: input.ipHash,
-    read: false,
-    source: input.source,
-    agentName: input.agentName,
-  };
-  await kv.put(`confession:${timestamp}:${id}`, JSON.stringify(submission));
-  return submission;
-}
+/* ---------- Helpers ---------- */
 
 async function verifyTurnstile(
   token: string,
@@ -305,16 +288,6 @@ async function verifyTurnstile(
   );
   const data = (await res.json()) as { success: boolean };
   return data.success === true;
-}
-
-async function hashIP(ip: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(`${ip}:ai-crimes-salt`);
-  const hash = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(hash))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("")
-    .slice(0, 16);
 }
 
 export default app;
