@@ -10,6 +10,10 @@ workers_dev = false
 pattern = "ai-crimes-in-production.com"
 custom_domain = true
 
+[[routes]]
+pattern = "www.ai-crimes-in-production.com"
+custom_domain = true
+
 # KV namespace for storing confessions and rate limit keys.
 # For local dev (`wrangler dev`): Miniflare creates a local SQLite-backed KV,
 # the id/preview_id below don't need to be real. Wrangler still requires them
@@ -33,4 +37,5 @@ enabled = true
 # Custom domain is wired up via the Cloudflare dashboard after deploy:
 #   Dashboard -> Workers & Pages -> ai-crimes-in-production -> Settings -> Domains & Routes
 #   Add custom domain: ai-crimes-in-production.com
+#   Add custom domain: www.ai-crimes-in-production.com
 # DNS is automatic since the zone is already on Cloudflare.
